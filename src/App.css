@@ -114,6 +114,15 @@
   background: white;
 }
 
+.current-exercise-name {
+  display: inline-block;
+  font-size: clamp(1.8rem, 5vw, 2.8rem);
+  font-weight: 800;
+  line-height: 1.1;
+  margin-left: 6px;
+  color: #0f172a;
+}
+
 .controls {
   display: flex;
   gap: 10px;

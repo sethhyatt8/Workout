@@ -18,8 +18,6 @@ const PHASE_LABELS: Record<WorkoutPhase, string> = {
   rest: "Rest",
 };
 
-const PHASE_SEQUENCE: WorkoutPhase[] = ["ready", "work", "rest"];
-
 function formatSeconds(totalSeconds: number): string {
   const clamped = Math.max(totalSeconds, 0);
   const minutes = Math.floor(clamped / 60);
@@ -27,10 +25,25 @@ function formatSeconds(totalSeconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-function getNextPhase(current: WorkoutPhase): WorkoutPhase {
-  const currentIndex = PHASE_SEQUENCE.indexOf(current);
-  const nextIndex = (currentIndex + 1) % PHASE_SEQUENCE.length;
-  return PHASE_SEQUENCE[nextIndex];
+function getPhaseSnapshot(elapsedSeconds: number, durations: PhaseDurations): {
+  phase: WorkoutPhase;
+  remaining: number;
+} {
+  const cycleLength = durations.ready + durations.work + durations.rest;
+  const positionInCycle = elapsedSeconds % cycleLength;
+
+  if (positionInCycle < durations.ready) {
+    return { phase: "ready", remaining: durations.ready - positionInCycle };
+  }
+
+  if (positionInCycle < durations.ready + durations.work) {
+    return {
+      phase: "work",
+      remaining: durations.ready + durations.work - positionInCycle,
+    };
+  }
+
+  return { phase: "rest", remaining: cycleLength - positionInCycle };
 }
 
 function App() {
@@ -40,10 +53,6 @@ function App() {
     DEFAULT_TOTAL_MINUTES * 60,
   );
 
-  const [currentPhase, setCurrentPhase] = useState<WorkoutPhase>("ready");
-  const [phaseSecondsRemaining, setPhaseSecondsRemaining] = useState(
-    DEFAULT_DURATIONS.ready,
-  );
   const [elapsedSessionSeconds, setElapsedSessionSeconds] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -76,7 +85,7 @@ function App() {
       }
 
       secondsCursor = phaseEnd;
-      phase = getNextPhase(phase);
+      phase = phase === "ready" ? "work" : phase === "work" ? "rest" : "ready";
     }
 
     return count;
@@ -102,6 +111,16 @@ function App() {
     return Math.min((elapsedSessionSeconds / totalSessionSeconds) * 100, 100);
   }, [elapsedSessionSeconds, totalSessionSeconds]);
 
+  const phaseSnapshot = useMemo(() => {
+    if (elapsedSessionSeconds >= totalSessionSeconds) {
+      return { phase: "rest" as WorkoutPhase, remaining: 0 };
+    }
+    return getPhaseSnapshot(elapsedSessionSeconds, phaseDurations);
+  }, [elapsedSessionSeconds, phaseDurations, totalSessionSeconds]);
+
+  const currentPhase = phaseSnapshot.phase;
+  const phaseSecondsRemaining = phaseSnapshot.remaining;
+
   useEffect(() => {
     if (!isRunning) {
       return;
@@ -116,38 +135,21 @@ function App() {
 
         return previousElapsed + 1;
       });
-
-      setPhaseSecondsRemaining((previousRemaining) => {
-        if (previousRemaining > 1) {
-          return previousRemaining - 1;
-        }
-
-        let upcomingPhase = currentPhase;
-        setCurrentPhase((previousPhase) => {
-          upcomingPhase = getNextPhase(previousPhase);
-          return upcomingPhase;
-        });
-
-        return phaseDurations[upcomingPhase];
-      });
     }, 1000);
 
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [currentPhase, isRunning, phaseDurations, totalSessionSeconds]);
+  }, [isRunning, totalSessionSeconds]);
 
   useEffect(() => {
     if (elapsedSessionSeconds >= totalSessionSeconds) {
       setIsRunning(false);
-      setPhaseSecondsRemaining(0);
     }
   }, [elapsedSessionSeconds, totalSessionSeconds]);
 
   const handleReset = () => {
     setIsRunning(false);
-    setCurrentPhase("ready");
-    setPhaseSecondsRemaining(phaseDurations.ready);
     setElapsedSessionSeconds(0);
   };
 
@@ -171,8 +173,6 @@ function App() {
     setPhaseDurations(updatedDurations);
     setTotalSessionSeconds(values.totalMinutes * 60);
     setIsRunning(false);
-    setCurrentPhase("ready");
-    setPhaseSecondsRemaining(values.ready);
     setElapsedSessionSeconds(0);
   };
 
@@ -222,7 +222,10 @@ function App() {
           </select>
 
           <p>
-            <strong>Current:</strong> {currentExercise?.name ?? "No exercise"}
+            <strong>Current:</strong>{" "}
+            <span className="current-exercise-name">
+              {currentExercise?.name ?? "No exercise"}
+            </span>
           </p>
           <p>
             <strong>Next:</strong> {nextExercise?.name ?? "No exercise"}
