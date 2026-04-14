@@ -69,7 +69,11 @@ function SettingsModal({
     <div className="modal-overlay" role="dialog" aria-modal="true">
       <div className="modal">
         <h2>Workout Settings</h2>
-        <p>Adjust interval lengths and total workout time.</p>
+        <p>
+          Adjust interval lengths and total workout time. Total minutes apply to
+          work and rest only; ready/warm-up time does not count toward the
+          session budget.
+        </p>
 
         <div className="modal-grid">
           <label htmlFor="ready-seconds">Ready (sec)</label>

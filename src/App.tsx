@@ -46,6 +46,13 @@ function getPhaseSnapshot(elapsedSeconds: number, durations: PhaseDurations): {
   return { phase: "rest", remaining: cycleLength - positionInCycle };
 }
 
+type SessionClock = {
+  /** Every second while running; drives phase sequence (includes ready). */
+  wallElapsedSeconds: number;
+  /** Only work + rest seconds; compared to total session budget. */
+  countedActiveSeconds: number;
+};
+
 function App() {
   const [phaseDurations, setPhaseDurations] =
     useState<PhaseDurations>(DEFAULT_DURATIONS);
@@ -53,7 +60,11 @@ function App() {
     DEFAULT_TOTAL_MINUTES * 60,
   );
 
-  const [elapsedSessionSeconds, setElapsedSessionSeconds] = useState(0);
+  const [sessionClock, setSessionClock] = useState<SessionClock>({
+    wallElapsedSeconds: 0,
+    countedActiveSeconds: 0,
+  });
+  const { wallElapsedSeconds, countedActiveSeconds } = sessionClock;
   const [isRunning, setIsRunning] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedPlaylistId, setSelectedPlaylistId] = useState(
@@ -68,7 +79,7 @@ function App() {
   );
 
   const workIntervalsCompleted = useMemo(() => {
-    if (elapsedSessionSeconds === 0) {
+    if (wallElapsedSeconds === 0) {
       return 0;
     }
 
@@ -76,11 +87,11 @@ function App() {
     let phase: WorkoutPhase = "ready";
     let secondsCursor = 0;
 
-    while (secondsCursor < elapsedSessionSeconds) {
+    while (secondsCursor < wallElapsedSeconds) {
       const duration = phaseDurations[phase];
       const phaseEnd = secondsCursor + duration;
 
-      if (phase === "work" && phaseEnd <= elapsedSessionSeconds) {
+      if (phase === "work" && phaseEnd <= wallElapsedSeconds) {
         count += 1;
       }
 
@@ -89,7 +100,7 @@ function App() {
     }
 
     return count;
-  }, [elapsedSessionSeconds, phaseDurations]);
+  }, [wallElapsedSeconds, phaseDurations]);
 
   const currentExercise = selectedPlaylist?.exercises.length
     ? selectedPlaylist.exercises[
@@ -108,15 +119,15 @@ function App() {
       return 0;
     }
 
-    return Math.min((elapsedSessionSeconds / totalSessionSeconds) * 100, 100);
-  }, [elapsedSessionSeconds, totalSessionSeconds]);
+    return Math.min((countedActiveSeconds / totalSessionSeconds) * 100, 100);
+  }, [countedActiveSeconds, totalSessionSeconds]);
 
   const phaseSnapshot = useMemo(() => {
-    if (elapsedSessionSeconds >= totalSessionSeconds) {
+    if (countedActiveSeconds >= totalSessionSeconds) {
       return { phase: "rest" as WorkoutPhase, remaining: 0 };
     }
-    return getPhaseSnapshot(elapsedSessionSeconds, phaseDurations);
-  }, [elapsedSessionSeconds, phaseDurations, totalSessionSeconds]);
+    return getPhaseSnapshot(wallElapsedSeconds, phaseDurations);
+  }, [wallElapsedSeconds, countedActiveSeconds, phaseDurations, totalSessionSeconds]);
 
   const currentPhase = phaseSnapshot.phase;
   const phaseSecondsRemaining = phaseSnapshot.remaining;
@@ -127,34 +138,45 @@ function App() {
     }
 
     const intervalId = window.setInterval(() => {
-      setElapsedSessionSeconds((previousElapsed) => {
-        if (previousElapsed >= totalSessionSeconds) {
-          setIsRunning(false);
-          return totalSessionSeconds;
+      setSessionClock((previous) => {
+        if (previous.countedActiveSeconds >= totalSessionSeconds) {
+          return previous;
         }
 
-        return previousElapsed + 1;
+        const wall = previous.wallElapsedSeconds + 1;
+        const snap = getPhaseSnapshot(wall, phaseDurations);
+        const incrementCounted =
+          snap.phase === "work" || snap.phase === "rest" ? 1 : 0;
+        const counted = Math.min(
+          previous.countedActiveSeconds + incrementCounted,
+          totalSessionSeconds,
+        );
+
+        return {
+          wallElapsedSeconds: wall,
+          countedActiveSeconds: counted,
+        };
       });
     }, 1000);
 
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [isRunning, totalSessionSeconds]);
+  }, [isRunning, totalSessionSeconds, phaseDurations]);
 
   useEffect(() => {
-    if (elapsedSessionSeconds >= totalSessionSeconds) {
+    if (countedActiveSeconds >= totalSessionSeconds) {
       setIsRunning(false);
     }
-  }, [elapsedSessionSeconds, totalSessionSeconds]);
+  }, [countedActiveSeconds, totalSessionSeconds]);
 
   const handleReset = () => {
     setIsRunning(false);
-    setElapsedSessionSeconds(0);
+    setSessionClock({ wallElapsedSeconds: 0, countedActiveSeconds: 0 });
   };
 
   const handleToggleRunning = () => {
-    if (elapsedSessionSeconds >= totalSessionSeconds) {
+    if (countedActiveSeconds >= totalSessionSeconds) {
       handleReset();
       setIsRunning(true);
       return;
@@ -173,7 +195,7 @@ function App() {
     setPhaseDurations(updatedDurations);
     setTotalSessionSeconds(values.totalMinutes * 60);
     setIsRunning(false);
-    setElapsedSessionSeconds(0);
+    setSessionClock({ wallElapsedSeconds: 0, countedActiveSeconds: 0 });
   };
 
   const settingsInitialValues: SettingsValues = {
@@ -199,10 +221,16 @@ function App() {
 
         <div className="progress-section">
           <div className="progress-meta">
-            <span>{formatSeconds(elapsedSessionSeconds)} elapsed</span>
+            <span>
+              {formatSeconds(countedActiveSeconds)} elapsed
+              <span className="progress-hint"> (work + rest)</span>
+            </span>
             <span>{formatSeconds(totalSessionSeconds)} total</span>
           </div>
-          <div className="progress-track" aria-label="Session progress">
+          <div
+            className="progress-track"
+            aria-label="Session progress; warm-up time is excluded from elapsed and total budget"
+          >
             <div
               className="progress-fill"
               style={{ width: `${progressPercentage}%` }}
