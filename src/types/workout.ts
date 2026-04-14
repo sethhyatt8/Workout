@@ -1,7 +1,6 @@
-export type WorkoutPhase = "ready" | "work" | "rest";
+export type WorkoutPhase = "work" | "rest";
 
 export type PhaseDurations = {
-  ready: number;
   work: number;
   rest: number;
 };

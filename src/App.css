@@ -6,14 +6,6 @@
   padding: 28px;
 }
 
-.app-ready {
-  background: linear-gradient(
-    180deg,
-    rgba(251, 191, 36, 0.12),
-    rgba(11, 18, 32, 0) 45%
-  );
-}
-
 .app-work {
   background: linear-gradient(
     180deg,
@@ -60,10 +52,6 @@
   color: var(--text-primary);
 }
 
-.phase-ready {
-  background: rgba(251, 191, 36, 0.2);
-}
-
 .phase-work {
   background: rgba(244, 63, 94, 0.28);
 }
@@ -80,11 +68,6 @@
   font-weight: 800;
   color: var(--text-primary);
   text-shadow: 0 0 18px rgba(251, 113, 133, 0.2);
-}
-
-.timer-ready {
-  color: #38bdf8;
-  text-shadow: 0 0 20px rgba(56, 189, 248, 0.45);
 }
 
 .timer-work {
@@ -107,12 +90,6 @@
   margin-bottom: 6px;
   font-size: 0.9rem;
   color: var(--text-secondary);
-}
-
-.progress-hint {
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: var(--text-muted);
 }
 
 .progress-track {

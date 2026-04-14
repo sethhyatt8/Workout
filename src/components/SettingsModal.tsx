@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 
 type SettingsValues = {
-  ready: number;
   work: number;
   rest: number;
   totalMinutes: number;
@@ -29,7 +28,6 @@ function SettingsModal({
   onApply,
 }: SettingsModalProps) {
   const [formValues, setFormValues] = useState({
-    ready: String(initialValues.ready),
     work: String(initialValues.work),
     rest: String(initialValues.rest),
     totalMinutes: String(initialValues.totalMinutes),
@@ -38,7 +36,6 @@ function SettingsModal({
 
   useEffect(() => {
     setFormValues({
-      ready: String(initialValues.ready),
       work: String(initialValues.work),
       rest: String(initialValues.rest),
       totalMinutes: String(initialValues.totalMinutes),
@@ -51,17 +48,16 @@ function SettingsModal({
   }
 
   const handleApply = () => {
-    const ready = parsePositiveInt(formValues.ready);
     const work = parsePositiveInt(formValues.work);
     const rest = parsePositiveInt(formValues.rest);
     const totalMinutes = parsePositiveInt(formValues.totalMinutes);
 
-    if (!ready || !work || !rest || !totalMinutes) {
+    if (!work || !rest || !totalMinutes) {
       setError("All fields must be positive whole numbers.");
       return;
     }
 
-    onApply({ ready, work, rest, totalMinutes });
+    onApply({ work, rest, totalMinutes });
     onClose();
   };
 
@@ -70,26 +66,11 @@ function SettingsModal({
       <div className="modal">
         <h2>Workout Settings</h2>
         <p>
-          Adjust interval lengths and total workout time. Total minutes apply to
-          work and rest only; ready/warm-up time does not count toward the
-          session budget.
+          Adjust work and rest interval lengths and total session length. Total
+          minutes is the full workout timer (work and rest intervals).
         </p>
 
         <div className="modal-grid">
-          <label htmlFor="ready-seconds">Ready (sec)</label>
-          <input
-            id="ready-seconds"
-            type="number"
-            min={1}
-            value={formValues.ready}
-            onChange={(event) =>
-              setFormValues((previous) => ({
-                ...previous,
-                ready: event.target.value,
-              }))
-            }
-          />
-
           <label htmlFor="work-seconds">Work (sec)</label>
           <input
             id="work-seconds"
