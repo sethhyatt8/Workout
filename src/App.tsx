@@ -11,6 +11,9 @@ const DEFAULT_DURATIONS: PhaseDurations = {
 
 const DEFAULT_TOTAL_MINUTES = 30;
 
+/** Shown once after Start when the session has not begun (elapsed === 0). Not repeated each round. */
+const PRE_START_COUNTDOWN_SECONDS = 5;
+
 const PHASE_LABELS: Record<WorkoutPhase, string> = {
   work: "Work",
   rest: "Rest",
@@ -46,6 +49,10 @@ function App() {
 
   const [elapsedSessionSeconds, setElapsedSessionSeconds] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
+  /** 5…1 while counting down to first work interval; null when not in pre-start. */
+  const [preStartSecondsRemaining, setPreStartSecondsRemaining] = useState<
+    number | null
+  >(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedPlaylistId, setSelectedPlaylistId] = useState(
     starterPlaylists[0]?.id ?? "",
@@ -112,6 +119,31 @@ function App() {
   const currentPhase = phaseSnapshot.phase;
   const phaseSecondsRemaining = phaseSnapshot.remaining;
 
+  const isPreStart = preStartSecondsRemaining !== null;
+
+  useEffect(() => {
+    if (!isPreStart) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setPreStartSecondsRemaining((previous) => {
+        if (previous === null) {
+          return null;
+        }
+        if (previous === 1) {
+          setIsRunning(true);
+          return null;
+        }
+        return previous - 1;
+      });
+    }, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [isPreStart]);
+
   useEffect(() => {
     if (!isRunning) {
       return;
@@ -141,13 +173,24 @@ function App() {
 
   const handleReset = () => {
     setIsRunning(false);
+    setPreStartSecondsRemaining(null);
     setElapsedSessionSeconds(0);
   };
 
   const handleToggleRunning = () => {
+    if (preStartSecondsRemaining !== null) {
+      setPreStartSecondsRemaining(null);
+      return;
+    }
+
     if (elapsedSessionSeconds >= totalSessionSeconds) {
       handleReset();
-      setIsRunning(true);
+      setPreStartSecondsRemaining(PRE_START_COUNTDOWN_SECONDS);
+      return;
+    }
+
+    if (!isRunning && elapsedSessionSeconds === 0) {
+      setPreStartSecondsRemaining(PRE_START_COUNTDOWN_SECONDS);
       return;
     }
 
@@ -163,6 +206,7 @@ function App() {
     setPhaseDurations(updatedDurations);
     setTotalSessionSeconds(values.totalMinutes * 60);
     setIsRunning(false);
+    setPreStartSecondsRemaining(null);
     setElapsedSessionSeconds(0);
   };
 
@@ -172,18 +216,27 @@ function App() {
     totalMinutes: Math.floor(totalSessionSeconds / 60),
   };
 
+  const shellPhaseClass = isPreStart ? "prep" : currentPhase;
+  const phaseChipLabel = isPreStart
+    ? "Starting"
+    : PHASE_LABELS[currentPhase];
+
   return (
-    <main className={`app app-${currentPhase}`}>
+    <main className={`app app-${shellPhaseClass}`}>
       <section className="timer-card">
         <header className="top-row">
           <h1>HIIT Timer</h1>
-          <span className={`phase-chip phase-${currentPhase}`}>
-            {PHASE_LABELS[currentPhase]}
+          <span className={`phase-chip phase-${shellPhaseClass}`}>
+            {phaseChipLabel}
           </span>
         </header>
 
-        <div className={`timer-value timer-${currentPhase}`}>
-          {formatSeconds(phaseSecondsRemaining)}
+        <div
+          className={`timer-value timer-${isPreStart ? "prep" : currentPhase}`}
+        >
+          {isPreStart && preStartSecondsRemaining !== null
+            ? formatSeconds(preStartSecondsRemaining)
+            : formatSeconds(phaseSecondsRemaining)}
         </div>
 
         <div className="progress-section">
@@ -228,7 +281,11 @@ function App() {
             className="primary-btn"
             onClick={handleToggleRunning}
           >
-            {isRunning ? "Pause" : "Start"}
+            {isPreStart
+              ? "Cancel"
+              : isRunning
+                ? "Pause"
+                : "Start"}
           </button>
           <button className="secondary-btn" onClick={handleReset}>
             Reset
