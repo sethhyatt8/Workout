@@ -193,7 +193,9 @@ function App() {
           </span>
         </header>
 
-        <div className="timer-value">{formatSeconds(phaseSecondsRemaining)}</div>
+        <div className={`timer-value timer-${currentPhase}`}>
+          {formatSeconds(phaseSecondsRemaining)}
+        </div>
 
         <div className="progress-section">
           <div className="progress-meta">
