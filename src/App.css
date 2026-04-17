@@ -185,9 +185,10 @@
 }
 
 .current-exercise-name {
-  font-size: clamp(1.75rem, min(5.5vw, 6vh), 3.25rem);
+  /* Hero size: must read clearly larger than Next and larger than the old 2.8rem cap */
+  font-size: clamp(2.5rem, min(10vw, 12vh), 5.5rem);
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.12;
   color: var(--text-primary);
   max-width: 100%;
   word-break: break-word;
