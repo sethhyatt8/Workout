@@ -14,6 +14,8 @@ const DEFAULT_TOTAL_MINUTES = 30;
 /** Shown once after Start when the session has not begun (elapsed === 0). Not repeated each round. */
 const PRE_START_COUNTDOWN_SECONDS = 5;
 
+const DEFAULT_PLAYLIST_ID = "seth-1";
+
 const PHASE_LABELS: Record<WorkoutPhase, string> = {
   work: "Work",
   rest: "Rest",
@@ -55,7 +57,9 @@ function App() {
   >(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedPlaylistId, setSelectedPlaylistId] = useState(
-    starterPlaylists[0]?.id ?? "",
+    starterPlaylists.some((p) => p.id === DEFAULT_PLAYLIST_ID)
+      ? DEFAULT_PLAYLIST_ID
+      : starterPlaylists[0]?.id ?? "",
   );
 
   const selectedPlaylist = useMemo(
@@ -101,14 +105,6 @@ function App() {
       ]
     : undefined;
 
-  const progressPercentage = useMemo(() => {
-    if (totalSessionSeconds <= 0) {
-      return 0;
-    }
-
-    return Math.min((elapsedSessionSeconds / totalSessionSeconds) * 100, 100);
-  }, [elapsedSessionSeconds, totalSessionSeconds]);
-
   const phaseSnapshot = useMemo(() => {
     if (elapsedSessionSeconds >= totalSessionSeconds) {
       return { phase: "rest" as WorkoutPhase, remaining: 0 };
@@ -120,6 +116,48 @@ function App() {
   const phaseSecondsRemaining = phaseSnapshot.remaining;
 
   const isPreStart = preStartSecondsRemaining !== null;
+
+  const exerciseOrdinal1Based = useMemo(() => {
+    const total = selectedPlaylist?.exercises.length ?? 0;
+    if (total === 0) {
+      return null;
+    }
+
+    const idleBeforeStart =
+      elapsedSessionSeconds === 0 &&
+      !isRunning &&
+      preStartSecondsRemaining === null;
+
+    if (preStartSecondsRemaining !== null || idleBeforeStart) {
+      return null;
+    }
+
+    const sessionDone = elapsedSessionSeconds >= totalSessionSeconds;
+
+    if (sessionDone) {
+      if (workIntervalsCompleted === 0) {
+        return null;
+      }
+      return ((workIntervalsCompleted - 1) % total) + 1;
+    }
+
+    if (currentPhase === "work") {
+      return (workIntervalsCompleted % total) + 1;
+    }
+
+    if (workIntervalsCompleted === 0) {
+      return null;
+    }
+    return ((workIntervalsCompleted - 1) % total) + 1;
+  }, [
+    selectedPlaylist?.exercises.length,
+    preStartSecondsRemaining,
+    elapsedSessionSeconds,
+    isRunning,
+    totalSessionSeconds,
+    workIntervalsCompleted,
+    currentPhase,
+  ]);
 
   useEffect(() => {
     if (!isPreStart) {
@@ -221,15 +259,39 @@ function App() {
     ? "Starting"
     : PHASE_LABELS[currentPhase];
 
+  const exerciseTotal = selectedPlaylist?.exercises.length ?? 0;
+
   return (
     <main className={`app app-${shellPhaseClass}`}>
       <section className="timer-card">
         <header className="top-row">
           <h1>HIIT Timer</h1>
-          <span className={`phase-chip phase-${shellPhaseClass}`}>
-            {phaseChipLabel}
-          </span>
+          <div className="top-row-right">
+            <span className="session-time" aria-label="Session time elapsed and total">
+              {formatSeconds(elapsedSessionSeconds)} /{" "}
+              {formatSeconds(totalSessionSeconds)}
+            </span>
+            <span className={`phase-chip phase-${shellPhaseClass}`}>
+              {phaseChipLabel}
+            </span>
+          </div>
         </header>
+
+        <div className="exercise-counter" aria-live="polite">
+          {exerciseOrdinal1Based !== null ? (
+            <>
+              <span className="exercise-counter-current">{exerciseOrdinal1Based}</span>
+              <span className="exercise-counter-sep">/</span>
+              <span className="exercise-counter-total">{exerciseTotal}</span>
+            </>
+          ) : (
+            <span className="exercise-counter-placeholder">
+              <span className="exercise-counter-dash">—</span>
+              <span className="exercise-counter-sep">/</span>
+              <span className="exercise-counter-total">{exerciseTotal}</span>
+            </span>
+          )}
+        </div>
 
         <div
           className={`timer-value timer-${isPreStart ? "prep" : currentPhase}`}
@@ -239,22 +301,28 @@ function App() {
             : formatSeconds(phaseSecondsRemaining)}
         </div>
 
-        <div className="progress-section">
-          <div className="progress-meta">
-            <span>{formatSeconds(elapsedSessionSeconds)} elapsed</span>
-            <span>{formatSeconds(totalSessionSeconds)} total</span>
-          </div>
-          <div className="progress-track" aria-label="Session progress">
-            <div
-              className="progress-fill"
-              style={{ width: `${progressPercentage}%` }}
-            />
-          </div>
+        <div className="exercise-block">
+          <p className="current-line">
+            <span className="current-label">Now</span>
+            <span className="current-exercise-name">
+              {currentExercise?.name ?? "—"}
+            </span>
+          </p>
+          <p className="next-line">
+            <span className="next-label">Next</span>
+            <span className="next-exercise-name">
+              {nextExercise?.name ?? "—"}
+            </span>
+          </p>
         </div>
 
-        <div className="exercise-section">
-          <p className="exercise-title">Playlist</p>
+        <div className="playlist-row">
+          <label className="playlist-label" htmlFor="playlist-select">
+            Playlist
+          </label>
           <select
+            id="playlist-select"
+            className="playlist-select"
             value={selectedPlaylistId}
             onChange={(event) => setSelectedPlaylistId(event.target.value)}
           >
@@ -264,16 +332,6 @@ function App() {
               </option>
             ))}
           </select>
-
-          <p>
-            <strong>Current:</strong>{" "}
-            <span className="current-exercise-name">
-              {currentExercise?.name ?? "No exercise"}
-            </span>
-          </p>
-          <p>
-            <strong>Next:</strong> {nextExercise?.name ?? "No exercise"}
-          </p>
         </div>
 
         <div className="controls">
